@@ -1,19 +1,20 @@
 "use client"
 
-
 import QRCodeStyling, { Options } from "qr-code-styling"
 import styles from "../../../../public/page.module.css"
 import { useEffect, useRef, useState } from "react"
 import { Minus, Plus } from "lucide-react"
-// import { createQrCode, getFolders } from "@/src/lib/actions"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/src/components/ui/tabs"
 import { Input } from "@/src/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/src/components/ui/select"
 import { ColorPicker } from "@/src/components/ui/color-picker"
 import { Switch } from "@/src/components/ui/switch"
+import { useRouter } from "next/navigation"
 
 
 export default function QRCreate() {
+   const router = useRouter()
+
    const [options, setOptions] = useState<Options>({
       width: 200,
       height: 200,
@@ -28,8 +29,8 @@ export default function QRCreate() {
       },
       imageOptions: {
          hideBackgroundDots: true,
-         imageSize: 0.4,
-         margin: 4,
+         imageSize: 0.3,
+         margin: 0,
          crossOrigin: 'anonymous',
          saveAsBlob: true,
       },
@@ -54,17 +55,18 @@ export default function QRCreate() {
 
    const ref = useRef<HTMLDivElement>(null)
 
-   // useEffect(() => {
-   //    const loadData = async () => {
-   //       try {
-   //          const data = await getFolders("1")
-   //          setFolders(data.folders)
-   //       } catch (err) {
-   //          console.error("Failed to load data. Please try again.")
-   //       }
-   //    }
-   //    loadData()
-   // }, [])
+   useEffect(() => {
+      const loadData = async () => {
+         try {
+            const response = await fetch("/api/folders")
+            const { data } = await response.json()
+            setFolders(data.folders)
+         } catch (error) {
+            console.error(error)
+         }
+      }
+      loadData()
+   }, [])
 
    useEffect(() => {
       setQrCode(new QRCodeStyling(options))
@@ -113,27 +115,33 @@ export default function QRCreate() {
       });
    }
 
+   const qrName = useRef<HTMLInputElement>(null)
+   const qrLink = useRef<HTMLInputElement>(null)
+   const [qrFolder, setQrFolder] = useState("none")
+
    const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
       event.preventDefault()
       try {
-         const formData = new FormData(event.currentTarget)
-         const qrName = formData.get("QRName") as string
-         const qrLink = formData.get("QRLink") as string
-         const folder = formData.get("Folder") as string
 
          const qrCodeData = {
-            name: qrName,
-            url: qrLink,
-            options: JSON.stringify(options), // Convert options to a JSON string
+            name: qrName?.current?.value,
+            url: qrLink?.current?.value,
+            options: JSON.stringify(options),
             includeLogo: showLogoSwitch,
             includeFrame: showFrameSwitch,
-            frameText: formData.get("Frame") as string,
-            folderId: folder !== "none" ? folder : null,
+            frameText: "Frame",
+            folderId: qrFolder,
          }
 
-         const userId = "1" // Replace with the actual user ID
-         // await createQrCode(qrCodeData, userId)
-         alert("QR Code created successfully!")
+         const response = await fetch("/api/qr", {
+            method: "POST",
+            headers: {
+               "Content-Type": "application/json",
+            },
+            body: JSON.stringify(qrCodeData),
+         })
+
+         router.push("/dashboard")
       } catch (error) {
          console.error("Failed to create QR Code:", error)
          alert("Failed to create QR Code. Please try again.")
@@ -145,7 +153,7 @@ export default function QRCreate() {
          <h3 className="font-bold text-3xl tracking-tight">Create QR Code</h3>
          <div className="grid grid-cols-2 gap-4 mt-6">
             <div className="border-white/10 border rounded-md p-6">
-               <form action="">
+               <form onSubmit={handleSubmit}>
                   <Tabs defaultValue="basic">
                      <TabsList className="bg-[#272727] text-white/50 duration-100 grid w-full grid-cols-3">
                         <TabsTrigger value="basic">Basic</TabsTrigger>
@@ -156,19 +164,19 @@ export default function QRCreate() {
                      <TabsContent value="basic" className="flex flex-col gap-4 mt-4">
                         <div className="flex flex-col gap-2">
                            <label htmlFor="QRName" className="text-sm font-semibold">QR Code Name</label>
-                           <Input id="QRName" placeholder="My QR Code" />
+                           <Input ref={qrName} id="QRName" placeholder="My QR Code" required/>
                            <p className="text-white/50 text-xs">A name to help you identify this QR code.</p>
                         </div>
 
                         <div className="flex flex-col gap-2">
                            <label htmlFor="QRLink" className="text-sm font-semibold">URL</label>
-                           <Input id="QRLink" placeholder={options.data} onChange={(event) => updateQRCodeOption("data", event.target.value)} />
+                           <Input ref={qrLink} id="QRLink" placeholder={options.data} onChange={(event) => updateQRCodeOption("data", event.target.value)} required />
                            <p className="text-white/50 text-xs">The URL this QR code will link to when scanned.</p>
                         </div>
 
                         <div className="flex flex-col gap-2">
                            <label htmlFor="Folder" className="text-sm font-semibold">Folder (Optional)</label>
-                           <Select>
+                           <Select onValueChange={(value: string) => setQrFolder(value)}>
                               <SelectTrigger id={"Folder"}>
                                  <SelectValue placeholder="Select a folder" />
                               </SelectTrigger>
